@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+const Version = "0.1"
+
 type Cert struct {
 	Private *pem.Block
 	Public  *pem.Block
