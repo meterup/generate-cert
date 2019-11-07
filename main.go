@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto"
+	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -29,6 +32,8 @@ func main() {
 	host := flag.String("host", "", "Comma-separated hostnames and IPs to generate a certificate for")
 	validFor := flag.Duration("duration", 365*24*time.Hour, "Duration that certificate is valid for")
 	organization := flag.String("organization", "Acme Co", "Company to issue the cert to")
+	rootCert := flag.String("root-cert-path", "", "Path to a root certificate (will be generated if omitted)")
+	rootKey := flag.String("root-key-path", "", "Path to a root key (will be generated if omitted)")
 	flag.Parse()
 	if *version {
 		fmt.Fprintf(os.Stderr, "generate-cert version %s\n", gencert.Version)
@@ -36,14 +41,42 @@ func main() {
 	}
 
 	hosts := strings.Split(*host, ",")
-	certs, err := gencert.Generate(hosts, *organization, *validFor)
-	if err != nil {
-		log.Fatal(err)
+
+	var certs *gencert.Certs
+	if *rootCert != "" {
+		if *rootKey == "" {
+			log.Fatal("root-cert-path and root-key-path must both be specified")
+		}
+
+		root, err := tls.LoadX509KeyPair(*rootCert, *rootKey)
+		if err != nil {
+			log.Fatalf("reading key pair: %s\n", err)
+		}
+		if root.Leaf == nil {
+			root.Leaf, err = x509.ParseCertificate(root.Certificate[0])
+			if err != nil {
+				log.Fatalf("parsing x509 cert: %s\n", err)
+			}
+		}
+
+		signer := root.PrivateKey.(crypto.Signer)
+
+		certs, err = gencert.GenerateFromRoot(hosts, *organization, *validFor, root.Leaf, signer)
+		if err != nil {
+			log.Fatalf("generating cert from root: %s", err)
+		}
+	} else {
+		var err error
+		certs, err = gencert.Generate(hosts, *organization, *validFor)
+		if err != nil {
+			log.Fatalf("generating cert: %s", err)
+		}
+
+		if err := writeCert(certs.Root, "root"); err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	if err := writeCert(certs.Root, "root"); err != nil {
-		log.Fatal(err)
-	}
 	if err := writeCert(certs.Leaf, "leaf"); err != nil {
 		log.Fatal(err)
 	}

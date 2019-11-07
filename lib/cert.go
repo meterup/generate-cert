@@ -2,6 +2,7 @@ package gencert
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -55,6 +56,30 @@ func Generate(hosts []string, org string, validFor time.Duration) (*Certs, error
 		BasicConstraintsValid: true,
 	}
 
+	rootKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err := genCert(&rootTemplate, &rootTemplate, rootKey, rootKey)
+	if err != nil {
+		return nil, err
+	}
+
+	certs, err := GenerateFromRoot(hosts, org, validFor, &rootTemplate, rootKey)
+	if err != nil {
+		return nil, err
+	}
+
+	certs.Root = root
+	return certs, nil
+}
+
+func GenerateFromRoot(hosts []string, org string, validFor time.Duration, rootTemplate *x509.Certificate, rootKey crypto.Signer) (*Certs, error) {
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	notBefore := time.Now()
+	notAfter := notBefore.Add(validFor)
+
 	leafSerialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
 		log.Fatalf("failed to generate serial number: %s", err)
@@ -73,6 +98,10 @@ func Generate(hosts []string, org string, validFor time.Duration) (*Certs, error
 			x509.ExtKeyUsageServerAuth,
 		},
 		BasicConstraintsValid: true,
+	}
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
 	}
 
 	clientSerialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
@@ -94,6 +123,10 @@ func Generate(hosts []string, org string, validFor time.Duration) (*Certs, error
 		},
 		BasicConstraintsValid: true,
 	}
+	clientKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, h := range hosts {
 		if ip := net.ParseIP(h); ip != nil {
@@ -105,33 +138,23 @@ func Generate(hosts []string, org string, validFor time.Duration) (*Certs, error
 		}
 	}
 
-	root, err := genCert(&rootTemplate, &rootTemplate)
+	leaf, err := genCert(&leafTemplate, rootTemplate, leafKey, rootKey)
 	if err != nil {
 		return nil, err
 	}
-	leaf, err := genCert(&leafTemplate, &rootTemplate)
-	if err != nil {
-		return nil, err
-	}
-	client, err := genCert(&clientTemplate, &rootTemplate)
+	client, err := genCert(&clientTemplate, rootTemplate, clientKey, rootKey)
 	if err != nil {
 		return nil, err
 	}
 	return &Certs{
-		Root:   root,
 		Leaf:   leaf,
 		Client: client,
 	}, nil
 }
 
-func genCert(leaf *x509.Certificate, parent *x509.Certificate) (*Cert, error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, err
-	}
-
+func genCert(leaf *x509.Certificate, parent *x509.Certificate, key *ecdsa.PrivateKey, signer crypto.Signer) (*Cert, error) {
 	cert := new(Cert)
-	derBytes, err := x509.CreateCertificate(rand.Reader, leaf, parent, &key.PublicKey, key)
+	derBytes, err := x509.CreateCertificate(rand.Reader, leaf, parent, &key.PublicKey, signer)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create certificate: %s", err)
 	}
