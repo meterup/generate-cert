@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const Version = "0.2"
+const Version = "0.3"
 
 type Cert struct {
 	Private *pem.Block
@@ -30,20 +30,28 @@ type Certs struct {
 	Root, Leaf, Client *Cert
 }
 
-func Generate(hosts []string, org string, validFor time.Duration) (*Certs, error) {
+type Config struct {
+	Hosts    []string
+	Org      string
+	ValidFor time.Duration
+
+	ClientCommonName string
+}
+
+func Generate(cfg Config) (*Certs, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate serial number: %s", err)
 	}
 	notBefore := time.Now()
-	notAfter := notBefore.Add(validFor)
+	notAfter := notBefore.Add(cfg.ValidFor)
 
 	rootTemplate := x509.Certificate{
 		IsCA:         true,
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{org},
+			Organization: []string{cfg.Org},
 		},
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
@@ -66,7 +74,7 @@ func Generate(hosts []string, org string, validFor time.Duration) (*Certs, error
 		return nil, err
 	}
 
-	certs, err := GenerateFromRoot(hosts, org, validFor, &rootTemplate, rootKey)
+	certs, err := GenerateFromRoot(cfg, &rootTemplate, rootKey)
 	if err != nil {
 		return nil, err
 	}
@@ -75,10 +83,10 @@ func Generate(hosts []string, org string, validFor time.Duration) (*Certs, error
 	return certs, nil
 }
 
-func GenerateFromRoot(hosts []string, org string, validFor time.Duration, rootTemplate *x509.Certificate, rootKey crypto.Signer) (*Certs, error) {
+func GenerateFromRoot(cfg Config, rootTemplate *x509.Certificate, rootKey crypto.Signer) (*Certs, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	notBefore := time.Now()
-	notAfter := notBefore.Add(validFor)
+	notAfter := notBefore.Add(cfg.ValidFor)
 
 	leafSerialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
@@ -88,7 +96,7 @@ func GenerateFromRoot(hosts []string, org string, validFor time.Duration, rootTe
 		IsCA:         false,
 		SerialNumber: leafSerialNumber,
 		Subject: pkix.Name{
-			Organization: []string{org},
+			Organization: []string{cfg.Org},
 		},
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
@@ -112,7 +120,8 @@ func GenerateFromRoot(hosts []string, org string, validFor time.Duration, rootTe
 		IsCA:         false,
 		SerialNumber: clientSerialNumber,
 		Subject: pkix.Name{
-			Organization: []string{org},
+			CommonName:   cfg.ClientCommonName,
+			Organization: []string{cfg.Org},
 		},
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
@@ -128,7 +137,7 @@ func GenerateFromRoot(hosts []string, org string, validFor time.Duration, rootTe
 		return nil, err
 	}
 
-	for _, h := range hosts {
+	for _, h := range cfg.Hosts {
 		if ip := net.ParseIP(h); ip != nil {
 			leafTemplate.IPAddresses = append(leafTemplate.IPAddresses, ip)
 			clientTemplate.IPAddresses = append(clientTemplate.IPAddresses, ip)

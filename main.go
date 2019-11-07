@@ -34,6 +34,7 @@ func main() {
 	organization := flag.String("organization", "Acme Co", "Company to issue the cert to")
 	rootCert := flag.String("root-cert-path", "", "Path to a root certificate (will be generated if omitted)")
 	rootKey := flag.String("root-key-path", "", "Path to a root key (will be generated if omitted)")
+	clientCommonName := flag.String("client-common-name", "", "Common name for the client cert")
 	flag.Parse()
 	if *version {
 		fmt.Fprintf(os.Stderr, "generate-cert version %s\n", gencert.Version)
@@ -41,6 +42,12 @@ func main() {
 	}
 
 	hosts := strings.Split(*host, ",")
+	cfg := gencert.Config{
+		Hosts:            hosts,
+		Org:              *organization,
+		ValidFor:         *validFor,
+		ClientCommonName: *clientCommonName,
+	}
 
 	var certs *gencert.Certs
 	if *rootCert != "" {
@@ -61,13 +68,13 @@ func main() {
 
 		signer := root.PrivateKey.(crypto.Signer)
 
-		certs, err = gencert.GenerateFromRoot(hosts, *organization, *validFor, root.Leaf, signer)
+		certs, err = gencert.GenerateFromRoot(cfg, root.Leaf, signer)
 		if err != nil {
 			log.Fatalf("generating cert from root: %s", err)
 		}
 	} else {
 		var err error
-		certs, err = gencert.Generate(hosts, *organization, *validFor)
+		certs, err = gencert.Generate(cfg)
 		if err != nil {
 			log.Fatalf("generating cert: %s", err)
 		}
