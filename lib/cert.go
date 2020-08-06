@@ -35,7 +35,7 @@ func Generate(hosts []string, org string, validFor time.Duration) (*Certs, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate serial number: %s", err)
 	}
-	notBefore := time.Now()
+	notBefore := time.Now().UTC()
 	notAfter := notBefore.Add(validFor)
 
 	rootTemplate := x509.Certificate{
@@ -47,7 +47,7 @@ func Generate(hosts []string, org string, validFor time.Duration) (*Certs, error
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
 
-		KeyUsage: x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		ExtKeyUsage: []x509.ExtKeyUsage{
 			x509.ExtKeyUsageServerAuth,
 			x509.ExtKeyUsageClientAuth,
@@ -68,7 +68,7 @@ func Generate(hosts []string, org string, validFor time.Duration) (*Certs, error
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
 
-		KeyUsage: x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		KeyUsage: x509.KeyUsageDigitalSignature,
 		ExtKeyUsage: []x509.ExtKeyUsage{
 			x509.ExtKeyUsageServerAuth,
 		},
@@ -88,7 +88,7 @@ func Generate(hosts []string, org string, validFor time.Duration) (*Certs, error
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
 
-		KeyUsage: x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		KeyUsage: x509.KeyUsageDigitalSignature,
 		ExtKeyUsage: []x509.ExtKeyUsage{
 			x509.ExtKeyUsageClientAuth,
 		},
