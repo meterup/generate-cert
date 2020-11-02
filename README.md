@@ -10,3 +10,13 @@ github.com/Shyp/generate-tls-cert. I did not put a LICENSE file on that project
 and I am not in a position to speak for the company anymore, so I am rewriting
 it from scratch, without looking at that project. Any similarities are purely
 coincidental. This project is released with an MIT license.
+
+Note we exclusively generate and parse ecdsa keys, if you try to parse other
+types of certificates the code will break.
+
+## Testing
+
+use `make test-certs` to regenerate the certs in `lib/testdata`, which are then
+tested by code in `lib/cert_test.go`.
+
+The certs will need to be regenerated when/if they expire.

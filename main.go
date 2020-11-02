@@ -28,15 +28,35 @@ func main() {
 	version := flag.Bool("version", false, "Print the version string and exit")
 	host := flag.String("host", "", "Comma-separated hostnames and IPs to generate a certificate for")
 	validFor := flag.Duration("duration", 365*24*time.Hour, "Duration that certificate is valid for")
+	rootValidFor := flag.Duration("root-duration", 365*24*time.Hour, "Duration that root CA is valid for")
 	organization := flag.String("organization", "Acme Co", "Company to issue the cert to")
+	rootCAKey := flag.String("root-ca-key", "", "Use root CA on disk instead of generating one (should be a .key file)")
+	rootCAPEM := flag.String("root-ca-cert", "", "Use root CA certificate on disk instead of generating one (should be a .pem file)")
 	flag.Parse()
 	if *version {
 		fmt.Fprintf(os.Stderr, "generate-cert version %s\n", gencert.Version)
 		os.Exit(0)
 	}
+	if *rootCAKey != "" && *rootCAPEM == "" {
+		log.Fatal("must set both --root-ca-key and --root-ca-cert or neither")
+	}
+	if *rootCAKey == "" && *rootCAPEM != "" {
+		log.Fatal("must set both --root-ca-key and --root-ca-cert or neither")
+	}
+	if *rootCAKey != "" && *rootValidFor == 365*24*time.Hour {
+		// override default if you passed in a file, otherwise it will fail
+		*rootValidFor = 0
+	}
 
 	hosts := strings.Split(*host, ",")
-	certs, err := gencert.Generate(hosts, *organization, *validFor)
+	certs, err := gencert.Generate(gencert.Config{
+		Hosts:            hosts,
+		Org:              *organization,
+		RootValidFor:     *rootValidFor,
+		LeafValidFor:     *validFor,
+		RootCAPrivateKey: *rootCAKey,
+		RootCACert:       *rootCAPEM,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
