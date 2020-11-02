@@ -61,13 +61,26 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := writeCert(certs.Root, "root"); err != nil {
-		log.Fatal(err)
+	// only write root cert if we didn't just load it from disk
+	if *rootCAKey == "" {
+		if err := writeCert(certs.Root, "root"); err != nil {
+			log.Fatal(err)
+		}
 	}
 	if err := writeCert(certs.Leaf, "leaf"); err != nil {
 		log.Fatal(err)
 	}
+	fmt.Printf(`Wrote the following certs to disk - use these to terminate TLS traffic on a web server:
+
+leaf.key - the private key
+leaf.pem - the certificate
+`)
 	if err := writeCert(certs.Client, "client"); err != nil {
 		log.Fatal(err)
 	}
+	fmt.Printf(`Wrote the following certs to disk - use these to do client TLS (less common):
+
+client.key - the private key
+client.pem - the certificate
+`)
 }
